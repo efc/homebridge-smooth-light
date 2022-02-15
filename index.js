@@ -80,6 +80,7 @@ class SmoothLight {
 
 		this.server.listen(this.listenerPort, function () {
 			this.log('Listen server: http://%s:%s', ip.address(), this.listenerPort)
+			this.log('Setting up Smooth Light - A')
 		}.bind(this))
 
 		// create a new Lightbulb service
@@ -95,6 +96,9 @@ class SmoothLight {
 	 * @returns {Tuple}
 	 */
 	getServices() {
+
+		this.log.debug("Getting services")
+
 		this.informationService = new this.Service.AccessoryInformation()
 		this.informationService
 			.setCharacteristic(this.Characteristic.Manufacturer, this.manufacturer)
@@ -104,16 +108,16 @@ class SmoothLight {
 
 		// create handlers for required characteristics
 		this.service.getCharacteristic(this.Characteristic.On)
-			.onGet(this.handleGetStatus.bind(this))
+			.onGet(this.handleGetStatus.bind(this, 'is_on'))
 			.onSet(this.handleSetOn.bind(this))
 		this.service.getCharacteristic(this.Characteristic.Hue)
-			.onGet(this.handleGetStatus.bind(this))
+			.onGet(this.handleGetStatus.bind(this, 'hue'))
 			.onSet(this.handleSetHue.bind(this))
 		this.service.getCharacteristic(this.Characteristic.Saturation)
-			.onGet(this.handleGetStatus.bind(this))
+			.onGet(this.handleGetStatus.bind(this, 'saturation'))
 			.onSet(this.handleSetSaturation.bind(this))
 		this.service.getCharacteristic(this.Characteristic.Brightness)
-			.onGet(this.handleGetStatus.bind(this))
+			.onGet(this.handleGetStatus.bind(this, 'brightness'))
 			.onSet(this.handleSetBrightness.bind(this))
 
 		// get the initial status and set up regular status retrievals
@@ -234,25 +238,33 @@ class SmoothLight {
 	getStatus(callback) {
 		const token = this.freshToken()
 		const url = this.deviceRoot + '/status?token=' + token
-		this.log.debug('Getting status: %s', url)
+		this.log.debug("Getting status: %s", url)
 		this.httpRequest(url, '', 'GET', function (error, response, responseBody) {
 			if (error) {
 				this.log.warn('Error getting status: %s', error.message)
 				callback(error)
 			} else {
-				this.log.debug('Device response: %s', responseBody)
+				this.log.debug("Device response: %s", responseBody)
 				try {
-					var json = JSON.parse(responseBody)
-					this.service.getCharacteristic(this.Characteristic.On).updateValue(json.on)
-					this.service.getCharacteristic(this.Characteristic.Hue).updateValue(json.hue)
-					this.service.getCharacteristic(this.Characteristic.Saturation).updateValue(json.saturation)
-					this.service.getCharacteristic(this.Characteristic.Brightness).updateValue(json.brightness)
+					this.device = JSON.parse(responseBody)
+					this.service.getCharacteristic(this.Characteristic.On).updateValue(this.device['is_on'])
+					this.service.getCharacteristic(this.Characteristic.Hue).updateValue(this.device['hue'])
+					this.service.getCharacteristic(this.Characteristic.Saturation).updateValue(this.device['saturation'])
+					this.service.getCharacteristic(this.Characteristic.Brightness).updateValue(this.device['brightness'])
 					callback()
 				} catch (e) {
 					this.log.warn('Error parsing status response: %s\nError message: %s', responseBody, e.message)
 				}
 			}
 		}.bind(this))
+	}
+
+	/**
+	 * Called by Homebridge whenever it needs to update the status of the device.
+	 */
+	handleGetStatus(attribute) {
+		this.getStatus(function () { })
+		return this.device[attribute]
 	}
 
 	/**
@@ -263,7 +275,7 @@ class SmoothLight {
 	handleSetOn(value) {
 		const route = value ? '/switch/on' : '/switch/off'
 		const token = this.freshToken()
-		const url = this.deviceRoot + route + '?token=' + token + auto
+		const url = this.deviceRoot + route + '?token=' + token
 		this.log.debug("Sending: %s", url)
 		this.httpRequest(url, '', this.method, function (error, response, responseBody) {
 			if (error) {
@@ -282,7 +294,7 @@ class SmoothLight {
 	handleSetHue(value) {
 		const route = '/hue/set/' + value
 		const token = this.freshToken()
-		const url = this.deviceRoot + route + '?token=' + token + auto
+		const url = this.deviceRoot + route + '?token=' + token
 		this.log.debug("Sending: %s", url)
 		this.httpRequest(url, '', this.method, function (error, response, responseBody) {
 			if (error) {
@@ -298,10 +310,10 @@ class SmoothLight {
 	 * 
 	 * @param {Float} value saturation
 	 */
-	handleSetHue(value) {
+	handleSetSaturation(value) {
 		const route = '/saturation/set/' + value
 		const token = this.freshToken()
-		const url = this.deviceRoot + route + '?token=' + token + auto
+		const url = this.deviceRoot + route + '?token=' + token
 		this.log.debug("Sending: %s", url)
 		this.httpRequest(url, '', this.method, function (error, response, responseBody) {
 			if (error) {
@@ -317,10 +329,10 @@ class SmoothLight {
 	 * 
 	 * @param {Float} value brightness
 	 */
-	handleSetHue(value) {
+	handleSetBrightness(value) {
 		const route = '/brightness/set/' + value
 		const token = this.freshToken()
-		const url = this.deviceRoot + route + '?token=' + token + auto
+		const url = this.deviceRoot + route + '?token=' + token
 		this.log.debug("Sending: %s", url)
 		this.httpRequest(url, '', this.method, function (error, response, responseBody) {
 			if (error) {
